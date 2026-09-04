@@ -82,7 +82,8 @@ function blockElementRects(codepoint: number): readonly CellFraction[] {
  * QR codes and progress bars are rows of them. A font glyph only spans the
  * face's own em box, which is shorter than the padded cell, so stacked rows
  * would show a background stripe between them. Fill the cell geometry directly
- * instead, snapping edges so neighbouring blocks meet without a seam.
+ * instead, snapping edges so neighbouring blocks meet without a seam. An
+ * eighth block thinner than a pixel still gets one pixel, kept inside its cell.
  */
 function drawBlockElement(
   context: CanvasRenderingContext2D,
@@ -99,12 +100,14 @@ function drawBlockElement(
     context.save();
     context.globalAlpha = (codepoint - 0x2590) / 4;
   }
+  const right = Math.round(left + width);
+  const bottom = Math.round(top + height);
   for (const [x, y, w, h] of blockElementRects(codepoint)) {
     const x0 = Math.round(left + x * width);
-    const x1 = Math.round(left + (x + w) * width);
     const y0 = Math.round(top + y * height);
-    const y1 = Math.round(top + (y + h) * height);
-    context.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+    const w0 = Math.max(1, Math.round(left + (x + w) * width) - x0);
+    const h0 = Math.max(1, Math.round(top + (y + h) * height) - y0);
+    context.fillRect(Math.min(x0, right - w0), Math.min(y0, bottom - h0), w0, h0);
   }
   if (shaded) context.restore();
   return true;

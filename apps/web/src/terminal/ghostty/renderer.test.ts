@@ -142,6 +142,65 @@ describe("renderGhosttySnapshot", () => {
     expect(fillTextCalls).toEqual([]);
   });
 
+  it("keeps a sub-pixel eighth block inside its own cell", () => {
+    const foregroundRects: number[][] = [];
+    let fillStyle = "";
+    const context = {
+      canvas: { width: 200, height: 40 },
+      beginPath: () => {},
+      clip: () => {},
+      fillRect: (...args: number[]) => {
+        if (fillStyle === "rgb(255, 255, 255)") foregroundRects.push(args);
+      },
+      fillText: () => {},
+      rect: () => {},
+      resetTransform: () => {},
+      restore: () => {},
+      save: () => {},
+      set fillStyle(value: string) {
+        fillStyle = value;
+      },
+      set font(_value: string) {},
+      set textBaseline(_value: string) {},
+    } as unknown as CanvasRenderingContext2D;
+    const snapshot: GhosttySnapshot = {
+      cols: 2,
+      rows: 1,
+      foreground: { r: 255, g: 255, b: 255 },
+      background: { r: 0, g: 0, b: 0 },
+      cursor: { r: 255, g: 255, b: 255 },
+      cursorX: -1,
+      cursorY: -1,
+      cursorVisible: false,
+      cursorBlinking: false,
+      cursorStyle: 1,
+      dirtyRows: new Set([0]),
+      rowData: [
+        {
+          cells: [cell(" "), cell("\u2595")],
+          text: " \u2595",
+          isWrapContinuation: false,
+          wrapsToNext: false,
+        },
+      ],
+    };
+
+    renderGhosttySnapshot({
+      context,
+      snapshot,
+      // The right eighth of the second cell spans 17.5..18.4, which rounds to
+      // nothing; it must land on 17..18 rather than spill into column three.
+      metrics: { width: 7.2, height: 16, baseline: 11 },
+      fontSize: 12,
+      fontFamily: "monospace",
+      padding: 4,
+      forceFull: false,
+      cursorOn: false,
+    });
+
+    expect(foregroundRects).toEqual([[17, 4, 1, 16]]);
+  });
+
   it("keeps block geometry when a block cursor inverts the cell", () => {
     const backgroundRects: number[][] = [];
     const fillTextCalls: unknown[][] = [];
