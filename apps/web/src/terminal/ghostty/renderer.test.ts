@@ -68,9 +68,138 @@ describe("ghosttyTextRunEnd", () => {
     ];
     expect(ghosttyTextRunEnd(cells, 0, () => true)).toBe(4);
   });
+
+  it("stops before a block element so it never enters a font text run", () => {
+    expect(ghosttyTextRunEnd([cell("a"), cell("\u2588"), cell("b")], 0, () => true)).toBe(1);
+  });
 });
 
 describe("renderGhosttySnapshot", () => {
+  it("fills block elements edge to edge so stacked rows leave no stripe", () => {
+    const foregroundRects: number[][] = [];
+    const fillTextCalls: unknown[][] = [];
+    let fillStyle = "";
+    const context = {
+      canvas: { width: 200, height: 80 },
+      beginPath: () => {},
+      clip: () => {},
+      fillRect: (...args: number[]) => {
+        if (fillStyle === "rgb(255, 255, 255)") foregroundRects.push(args);
+      },
+      fillText: (...args: unknown[]) => fillTextCalls.push(args),
+      rect: () => {},
+      resetTransform: () => {},
+      restore: () => {},
+      save: () => {},
+      set fillStyle(value: string) {
+        fillStyle = value;
+      },
+      set font(_value: string) {},
+      set textBaseline(_value: string) {},
+    } as unknown as CanvasRenderingContext2D;
+    const row = (text: string) => ({
+      cells: Array.from(text, (char) => cell(char)),
+      text,
+      isWrapContinuation: false,
+      wrapsToNext: false,
+    });
+    const snapshot: GhosttySnapshot = {
+      cols: 3,
+      rows: 2,
+      foreground: { r: 255, g: 255, b: 255 },
+      background: { r: 0, g: 0, b: 0 },
+      cursor: { r: 255, g: 255, b: 255 },
+      cursorX: -1,
+      cursorY: -1,
+      cursorVisible: false,
+      cursorBlinking: false,
+      cursorStyle: 1,
+      dirtyRows: new Set([0, 1]),
+      // The half blocks qrcode-terminal emits for Expo QR codes, plus a
+      // quadrant so the merged-rectangle table is exercised.
+      rowData: [row("\u2580\u2584\u2588"), row("\u2588 \u2599")],
+    };
+
+    renderGhosttySnapshot({
+      context,
+      snapshot,
+      metrics: { width: 10, height: 20, baseline: 15 },
+      fontSize: 12,
+      fontFamily: "monospace",
+      padding: 4,
+      forceFull: false,
+      cursorOn: false,
+    });
+
+    expect(foregroundRects).toEqual([
+      [4, 4, 10, 10],
+      [14, 14, 10, 10],
+      [24, 4, 10, 20],
+      [4, 24, 10, 20],
+      [24, 24, 5, 20],
+      [29, 34, 5, 10],
+    ]);
+    expect(fillTextCalls).toEqual([]);
+  });
+
+  it("keeps block geometry when a block cursor inverts the cell", () => {
+    const backgroundRects: number[][] = [];
+    const fillTextCalls: unknown[][] = [];
+    let fillStyle = "";
+    const context = {
+      canvas: { width: 200, height: 40 },
+      beginPath: () => {},
+      clip: () => {},
+      fillRect: (...args: number[]) => {
+        if (fillStyle === "rgb(0, 0, 0)") backgroundRects.push(args);
+      },
+      fillText: (...args: unknown[]) => fillTextCalls.push(args),
+      rect: () => {},
+      resetTransform: () => {},
+      restore: () => {},
+      save: () => {},
+      set fillStyle(value: string) {
+        fillStyle = value;
+      },
+      set font(_value: string) {},
+      set textBaseline(_value: string) {},
+    } as unknown as CanvasRenderingContext2D;
+    const snapshot: GhosttySnapshot = {
+      cols: 1,
+      rows: 1,
+      foreground: { r: 255, g: 255, b: 255 },
+      background: { r: 0, g: 0, b: 0 },
+      cursor: { r: 255, g: 255, b: 255 },
+      cursorX: 0,
+      cursorY: 0,
+      cursorVisible: true,
+      cursorBlinking: false,
+      cursorStyle: 1,
+      dirtyRows: new Set(),
+      rowData: [
+        { cells: [cell("\u2584")], text: "\u2584", isWrapContinuation: false, wrapsToNext: false },
+      ],
+    };
+
+    renderGhosttySnapshot({
+      context,
+      snapshot,
+      metrics: { width: 10, height: 20, baseline: 15 },
+      fontSize: 12,
+      fontFamily: "monospace",
+      padding: 4,
+      forceFull: false,
+      cursorOn: true,
+    });
+
+    // The row clear comes first; the inverted lower half block follows it.
+    expect(backgroundRects).toEqual([
+      [4, 4, 10, 20],
+      [4, 14, 10, 10],
+    ]);
+    expect(fillTextCalls).toEqual([]);
+  });
+
   it("underlines every cell in a hovered wrapped link", () => {
     const fillRectCalls: number[][] = [];
     const context = {
