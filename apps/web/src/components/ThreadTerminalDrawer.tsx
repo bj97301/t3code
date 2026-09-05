@@ -11,6 +11,8 @@ import {
   type TerminalSessionState,
 } from "@t3tools/client-runtime/state/terminal";
 import {
+  Pin,
+  PinOff,
   Plus,
   Square,
   SquareSplitHorizontal,
@@ -286,6 +288,8 @@ export function shouldHandleTerminalExit(
 interface TerminalViewportProps {
   advancedTypography: boolean;
   threadRef: ScopedThreadRef;
+  /** Thread whose preview panel opens links; the shared drawer's sessions live under a synthetic thread. */
+  previewThreadRef: ScopedThreadRef;
   threadId: ThreadId;
   terminalId: string;
   terminalLabel: string;
@@ -311,6 +315,7 @@ interface TerminalLaunchLocation {
 export function TerminalViewport({
   advancedTypography,
   threadRef,
+  previewThreadRef,
   threadId,
   terminalId,
   terminalLabel,
@@ -765,7 +770,7 @@ export function TerminalViewport({
           };
           void openTerminalLinkInPreview({
             url: text,
-            threadRef,
+            threadRef: previewThreadRef,
             openPreview,
             fallbackToBrowser,
           });
@@ -946,8 +951,13 @@ export function TerminalViewport({
 interface ThreadTerminalDrawerProps {
   mode?: "drawer" | "panel";
   threadRef: ScopedThreadRef;
+  /** Thread whose preview panel opens links. Defaults to `threadRef`. */
+  previewThreadRef?: ScopedThreadRef;
   threadId: ThreadId;
   cwd: string;
+  /** Whether this drawer is pinned for its project. The pin button only renders with `onTogglePinned`. */
+  pinned?: boolean;
+  onTogglePinned?: (() => void) | undefined;
   worktreePath?: string | null;
   runtimeEnv?: Record<string, string>;
   visible?: boolean;
@@ -1007,8 +1017,11 @@ function TerminalActionButton({ label, className, onClick, children }: TerminalA
 export default function ThreadTerminalDrawer({
   mode = "drawer",
   threadRef,
+  previewThreadRef = threadRef,
   threadId,
   cwd,
+  pinned = false,
+  onTogglePinned,
   worktreePath,
   runtimeEnv,
   visible = true,
@@ -1223,6 +1236,14 @@ export default function ThreadTerminalDrawer({
   const closeTerminalActionLabel = closeShortcutLabel
     ? `Close Terminal (${closeShortcutLabel})`
     : "Close Terminal";
+  const pinTerminalActionLabel = pinned
+    ? "Unpin Terminal (every thread in this project opens this terminal)"
+    : "Pin Terminal for Project (every thread in this project opens this terminal)";
+  const pinTerminalActionIcon = pinned ? (
+    <PinOff className="size-3.25" />
+  ) : (
+    <Pin className="size-3.25" />
+  );
   const onSplitTerminalAction = useCallback(() => {
     if (hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1438,6 +1459,20 @@ export default function ThreadTerminalDrawer({
             >
               <Trash2 className="size-3.25" />
             </TerminalActionButton>
+            {onTogglePinned ? (
+              <>
+                <div className="h-4 w-px bg-border/80" />
+                <TerminalActionButton
+                  className={`p-1 transition-colors hover:bg-accent ${
+                    pinned ? "text-primary" : "text-foreground/90"
+                  }`}
+                  onClick={onTogglePinned}
+                  label={pinTerminalActionLabel}
+                >
+                  {pinTerminalActionIcon}
+                </TerminalActionButton>
+              </>
+            ) : null}
           </div>
         </div>
       )}
@@ -1487,6 +1522,7 @@ export default function ThreadTerminalDrawer({
                         <TerminalViewport
                           advancedTypography={advancedTypography}
                           threadRef={threadRef}
+                          previewThreadRef={previewThreadRef}
                           threadId={threadId}
                           terminalId={terminalId}
                           terminalLabel={terminalLabelById.get(terminalId) ?? "Terminal"}
@@ -1517,6 +1553,7 @@ export default function ThreadTerminalDrawer({
                   advancedTypography={advancedTypography}
                   key={resolvedActiveTerminalId}
                   threadRef={threadRef}
+                  previewThreadRef={previewThreadRef}
                   threadId={threadId}
                   terminalId={resolvedActiveTerminalId}
                   terminalLabel={terminalLabelById.get(resolvedActiveTerminalId) ?? "Terminal"}
@@ -1580,6 +1617,17 @@ export default function ThreadTerminalDrawer({
                   >
                     <Trash2 className="size-3.25" />
                   </TerminalActionButton>
+                  {onTogglePinned ? (
+                    <TerminalActionButton
+                      className={`inline-flex h-full items-center border-l border-border/70 px-1 transition-colors hover:bg-accent/70 ${
+                        pinned ? "text-primary" : "text-foreground/90"
+                      }`}
+                      onClick={onTogglePinned}
+                      label={pinTerminalActionLabel}
+                    >
+                      {pinTerminalActionIcon}
+                    </TerminalActionButton>
+                  ) : null}
                 </div>
               </div>
 
