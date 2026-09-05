@@ -46,11 +46,13 @@ during replay. Preserve both protections when changing retention or renderer cod
 ## Pinned drawers
 
 Sessions stay keyed by their owning thread. A pin is client-local UI state in
-[`terminalUiStateStore.ts`](../../apps/web/src/terminalUiStateStore.ts): one thread
-key per project key. While a project has a pin, every thread in it resolves its
-drawer ref (layout, sessions, `terminal.toggle`) to the pinned thread through
-[`useTerminalDrawerRef`](../../apps/web/src/hooks/useTerminalDrawerRef.ts), and new
-shells launch from the pinned thread's own worktree or project root. Pins to threads
-that no longer exist fall back to the thread's own drawer, and clearing a deleted
-thread's terminal state drops its pins. Right-panel terminals and the mobile terminal
-ignore pins; preview links from a pinned drawer open in the viewed thread's preview.
+[`terminalUiStateStore.ts`](../../apps/web/src/terminalUiStateStore.ts): a thread key
+under a pin key that names either a project or a whole environment. While a pin
+exists, every thread it covers resolves its drawer ref (layout, sessions,
+`terminal.toggle`) to the pinned thread through
+[`useTerminalDrawerPin`](../../apps/web/src/hooks/useTerminalDrawerRef.ts); an
+environment pin wins over a project pin. New shells launch from the pinned thread's
+own worktree or project root. Pins to threads that no longer exist, or that moved to
+another project, fall back to the thread's own drawer, and clearing a deleted thread's
+terminal state drops its pins. Right-panel terminals and the mobile terminal ignore
+pins; preview links from a pinned drawer open in the viewed thread's preview.

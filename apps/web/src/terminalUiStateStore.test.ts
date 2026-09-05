@@ -297,7 +297,8 @@ describe("terminalUiStateStore actions", () => {
 });
 
 describe("terminalUiStateStore drawer pins", () => {
-  const PROJECT_KEY = "environment-a:project-1";
+  const PROJECT_KEY = "project:environment-a:project-1";
+  const ENVIRONMENT_KEY = "environment:environment-a";
   const PINNED_THREAD_REF = scopeThreadRef("environment-a" as never, ThreadId.make("thread-2"));
 
   beforeEach(() => {
@@ -305,48 +306,54 @@ describe("terminalUiStateStore drawer pins", () => {
     useTerminalUiStateStore.setState({
       terminalUiStateByThreadKey: {},
       suppressedTerminalIdsByThreadKey: {},
-      pinnedTerminalThreadKeyByProjectKey: {},
+      pinnedTerminalThreadKeyByPinKey: {},
     });
   });
 
-  it("pins one thread's drawer per project and unpins it again", () => {
+  it("pins one thread's drawer per pin key and unpins it again", () => {
     const store = useTerminalUiStateStore.getState();
     store.pinTerminalDrawer(PROJECT_KEY, PINNED_THREAD_REF);
     expect(
       selectPinnedTerminalThreadKey(
-        useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey,
+        useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey,
         PROJECT_KEY,
       ),
     ).toBe(scopedThreadKey(PINNED_THREAD_REF));
     expect(
       selectPinnedTerminalThreadKey(
-        useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey,
-        "environment-a:project-2",
+        useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey,
+        "project:environment-a:project-2",
       ),
     ).toBeNull();
 
     store.pinTerminalDrawer(PROJECT_KEY, THREAD_REF);
-    expect(
-      useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey[PROJECT_KEY],
-    ).toBe(scopedThreadKey(THREAD_REF));
+    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey[PROJECT_KEY]).toBe(
+      scopedThreadKey(THREAD_REF),
+    );
 
+    store.pinTerminalDrawer(ENVIRONMENT_KEY, PINNED_THREAD_REF);
     store.unpinTerminalDrawer(PROJECT_KEY);
-    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey).toEqual({});
+    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey).toEqual({
+      [ENVIRONMENT_KEY]: scopedThreadKey(PINNED_THREAD_REF),
+    });
+    store.unpinTerminalDrawer(ENVIRONMENT_KEY);
+    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey).toEqual({});
   });
 
   it("drops a project's pin when the pinned thread's terminal state is cleared or removed", () => {
     const store = useTerminalUiStateStore.getState();
     store.pinTerminalDrawer(PROJECT_KEY, PINNED_THREAD_REF);
+    store.pinTerminalDrawer(ENVIRONMENT_KEY, PINNED_THREAD_REF);
     store.clearTerminalUiState(PINNED_THREAD_REF);
-    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey).toEqual({});
+    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey).toEqual({});
 
     store.pinTerminalDrawer(PROJECT_KEY, PINNED_THREAD_REF);
     store.removeTerminalUiState(THREAD_REF);
-    expect(
-      useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey[PROJECT_KEY],
-    ).toBe(scopedThreadKey(PINNED_THREAD_REF));
+    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey[PROJECT_KEY]).toBe(
+      scopedThreadKey(PINNED_THREAD_REF),
+    );
     store.removeTerminalUiState(PINNED_THREAD_REF);
-    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByProjectKey).toEqual({});
+    expect(useTerminalUiStateStore.getState().pinnedTerminalThreadKeyByPinKey).toEqual({});
   });
 
   it("persists pins alongside drawer layouts", () => {
@@ -354,11 +361,11 @@ describe("terminalUiStateStore drawer pins", () => {
     const persisted = migratePersistedTerminalUiStateStoreState(
       {
         terminalUiStateByThreadKey: {},
-        pinnedTerminalThreadKeyByProjectKey: { [PROJECT_KEY]: scopedThreadKey(PINNED_THREAD_REF) },
+        pinnedTerminalThreadKeyByPinKey: { [PROJECT_KEY]: scopedThreadKey(PINNED_THREAD_REF) },
       },
       4,
     );
-    expect(persisted.pinnedTerminalThreadKeyByProjectKey).toEqual({
+    expect(persisted.pinnedTerminalThreadKeyByPinKey).toEqual({
       [PROJECT_KEY]: scopedThreadKey(PINNED_THREAD_REF),
     });
   });

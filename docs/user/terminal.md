@@ -5,17 +5,22 @@ hide it. With a shell focused, `mod+d` splits it, `mod+shift+d` splits it vertic
 a tab, and `mod+w` closes the active shell. Shells start in the thread's worktree when it has one,
 otherwise in the project root, and keep running while the drawer is hidden.
 
-## Pinning a drawer to a project
+## Pinning a drawer
 
-By default each thread has its own drawer and its own shells. Click the pin icon in the drawer's
-toolbar to pin that thread's drawer to its project. From then on, `mod+j` on any thread in the
-project opens the pinned drawer, so its shells, tabs, splits, and height follow you from thread to
-thread. New shells in a pinned drawer start where the pinned thread runs. Links you click in it
-still open in the preview of the thread you are looking at.
+By default each thread has its own drawer and its own shells. The pin icon at the end of the
+drawer's toolbar cycles through three states:
 
-Click the pin again from any thread in the project to unpin it. Every thread gets its own drawer
-back, and the shells stay with the thread that owned them. Deleting the pinned thread also unpins
-it. Pins are remembered per device.
+- **Off.** The thread's own drawer.
+- **Pinned to project.** Every thread in this project opens this drawer with `mod+j`. Its shells,
+  tabs, splits, and height follow you from thread to thread.
+- **Pinned for all projects.** Every thread in the environment opens this drawer, whatever project
+  it belongs to. A project pin elsewhere is shadowed until you unpin.
+
+Click once to pin to the project, again to pin for all projects, and a third time to unpin. New
+shells in a pinned drawer start where the pinned thread runs. Links you click in it still open in
+the preview of the thread you are looking at. Unpinning hands each thread its own drawer back, and
+the shells stay with the thread that owned them. Deleting the pinned thread also unpins it. Pins are
+remembered per device.
 
 Terminals opened as right-panel tabs always belong to their thread, and the mobile app opens a
 thread's own terminals regardless of any pin.

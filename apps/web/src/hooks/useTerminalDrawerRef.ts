@@ -7,7 +7,12 @@ import { type ScopedThreadRef } from "@t3tools/contracts";
 import { useMemo } from "react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
-import { resolveTerminalDrawerRef } from "../lib/terminalDrawer";
+import {
+  environmentTerminalPinKey,
+  projectTerminalPinKey,
+  resolveTerminalDrawer,
+  type TerminalDrawerPinState,
+} from "../lib/terminalDrawer";
 import { useThreadShell } from "../state/entities";
 import { selectPinnedTerminalThreadKey, useTerminalUiStateStore } from "../terminalUiStateStore";
 
@@ -23,29 +28,49 @@ export function useThreadProjectKey(threadRef: ScopedThreadRef | null): string |
     : null;
 }
 
-/**
- * Drawer ref `terminal.toggle` targets for `threadRef`: the project's pinned
- * drawer when one is pinned and its thread still exists in that project,
- * otherwise the thread's own. Stable while the inputs are.
- */
-export function useTerminalDrawerRef(threadRef: ScopedThreadRef | null): ScopedThreadRef | null {
-  const projectKey = useThreadProjectKey(threadRef);
+function usePinnedThreadRef(pinKey: string | null): ScopedThreadRef | null {
   const pinnedThreadKey = useTerminalUiStateStore((state) =>
-    selectPinnedTerminalThreadKey(state.pinnedTerminalThreadKeyByProjectKey, projectKey),
+    selectPinnedTerminalThreadKey(state.pinnedTerminalThreadKeyByPinKey, pinKey),
   );
-  const pinnedThreadRef = useMemo(
+  return useMemo(
     () => (pinnedThreadKey ? parseScopedThreadKey(pinnedThreadKey) : null),
     [pinnedThreadKey],
   );
-  // A deleted thread, or one moved to another project, no longer anchors the pin.
-  const pinnedProjectKey = useThreadProjectKey(pinnedThreadRef);
-  const pinnedThreadValid = pinnedProjectKey !== null && pinnedProjectKey === projectKey;
+}
+
+/**
+ * Drawer `terminal.toggle` targets for `threadRef`, and which pin put it
+ * there. Pins to threads that no longer exist, or that moved to another
+ * project, are ignored. Stable while the inputs are.
+ */
+export function useTerminalDrawerPin(threadRef: ScopedThreadRef | null): {
+  drawerRef: ScopedThreadRef | null;
+  pinState: TerminalDrawerPinState;
+} {
+  const projectKey = useThreadProjectKey(threadRef);
+  const projectPinnedRef = usePinnedThreadRef(
+    projectKey === null ? null : projectTerminalPinKey(projectKey),
+  );
+  const environmentPinnedRef = usePinnedThreadRef(
+    threadRef === null ? null : environmentTerminalPinKey(threadRef.environmentId),
+  );
+  // A null project key means the pinned thread is gone.
+  const projectPinnedProjectKey = useThreadProjectKey(projectPinnedRef);
+  const environmentPinnedProjectKey = useThreadProjectKey(environmentPinnedRef);
+  const projectPinValid =
+    projectPinnedProjectKey !== null && projectPinnedProjectKey === projectKey;
+  const environmentPinValid = environmentPinnedProjectKey !== null;
   return useMemo(
     () =>
-      resolveTerminalDrawerRef({
+      resolveTerminalDrawer({
         threadRef,
-        pinnedThreadRef: pinnedThreadValid ? pinnedThreadRef : null,
+        projectPinnedThreadRef: projectPinValid ? projectPinnedRef : null,
+        environmentPinnedThreadRef: environmentPinValid ? environmentPinnedRef : null,
       }),
-    [pinnedThreadRef, pinnedThreadValid, threadRef],
+    [environmentPinValid, environmentPinnedRef, projectPinValid, projectPinnedRef, threadRef],
   );
+}
+
+export function useTerminalDrawerRef(threadRef: ScopedThreadRef | null): ScopedThreadRef | null {
+  return useTerminalDrawerPin(threadRef).drawerRef;
 }

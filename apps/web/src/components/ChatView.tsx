@@ -266,12 +266,18 @@ import {
 import { appendPreviewAnnotationPrompt } from "../lib/previewAnnotation";
 import { appendReviewCommentsToPrompt, type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
+import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import {
-  selectPinnedTerminalThreadKey,
-  selectThreadTerminalUiState,
-  useTerminalUiStateStore,
-} from "../terminalUiStateStore";
-import { useTerminalDrawerRef, useThreadProjectKey } from "../hooks/useTerminalDrawerRef";
+  useTerminalDrawerPin,
+  useTerminalDrawerRef,
+  useThreadProjectKey,
+} from "../hooks/useTerminalDrawerRef";
+import {
+  environmentTerminalPinKey,
+  nextTerminalDrawerPinState,
+  projectTerminalPinKey,
+  type TerminalDrawerPinState,
+} from "../lib/terminalDrawer";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
@@ -808,8 +814,8 @@ interface PersistentThreadTerminalDrawerProps {
   /** Thread being viewed; links open in its preview even when this is another thread's pinned drawer. */
   previewThreadRef: ScopedThreadRef;
   active: boolean;
-  pinned: boolean;
-  onTogglePinned: () => void;
+  pinState: TerminalDrawerPinState;
+  onCyclePin: () => void;
   launchContext: PersistentTerminalLaunchContext | null;
   focusRequestId: number;
   splitShortcutLabel: string | undefined;
@@ -825,8 +831,8 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
   threadId,
   previewThreadRef,
   active,
-  pinned,
-  onTogglePinned,
+  pinState,
+  onCyclePin,
   launchContext,
   focusRequestId,
   splitShortcutLabel,
@@ -1155,8 +1161,8 @@ const PersistentThreadTerminalDrawer = memo(function PersistentThreadTerminalDra
           previewThreadRef={previewThreadRef}
           threadId={threadId}
           cwd={cwd}
-          pinned={pinned}
-          onTogglePinned={onTogglePinned}
+          pinState={pinState}
+          onCyclePin={onCyclePin}
           worktreePath={effectiveWorktreePath}
           runtimeEnv={runtimeEnv}
           visible={visible}
@@ -1817,37 +1823,40 @@ export default function ChatView(props: ChatViewProps) {
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
   // The drawer follows the project's pin: the pinned thread's drawer when one
   // is pinned, otherwise the thread's own. Right-panel terminals ignore pins.
-  const activeTerminalDrawerRef = useTerminalDrawerRef(activeThreadRef);
+  const { drawerRef: activeTerminalDrawerRef, pinState: terminalDrawerPinState } =
+    useTerminalDrawerPin(activeThreadRef);
   const activeTerminalDrawerKey = activeTerminalDrawerRef
     ? scopedThreadKey(activeTerminalDrawerRef)
     : null;
   const terminalDrawerThreadId = activeTerminalDrawerRef?.threadId ?? null;
   const activeThreadProjectKey = useThreadProjectKey(activeThreadRef);
-  const pinnedTerminalThreadKey = useTerminalUiStateStore((state) =>
-    selectPinnedTerminalThreadKey(
-      state.pinnedTerminalThreadKeyByProjectKey,
-      activeThreadProjectKey,
-    ),
-  );
-  // A pin only counts once it resolved; a stale pin to a deleted thread reads as unpinned.
-  const terminalDrawerPinned =
-    pinnedTerminalThreadKey !== null && pinnedTerminalThreadKey === activeTerminalDrawerKey;
   const pinTerminalDrawer = useTerminalUiStateStore((state) => state.pinTerminalDrawer);
   const unpinTerminalDrawer = useTerminalUiStateStore((state) => state.unpinTerminalDrawer);
-  // Pinning keeps the drawer in front for every thread in the project;
-  // unpinning hands each thread its own drawer back.
-  const toggleTerminalDrawerPinned = useCallback(() => {
-    if (activeThreadProjectKey === null || !activeThreadRef) return;
-    if (terminalDrawerPinned) {
-      unpinTerminalDrawer(activeThreadProjectKey);
-    } else {
-      pinTerminalDrawer(activeThreadProjectKey, activeThreadRef);
+  // The pin button cycles off → this project → every project → off. Moving
+  // from project to every project drops the project pin, so unpinning later
+  // lands on off instead of falling back to the project pin.
+  const cycleTerminalDrawerPin = useCallback(() => {
+    if (!activeThreadRef || !activeTerminalDrawerRef || activeThreadProjectKey === null) return;
+    const environmentPinKey = environmentTerminalPinKey(activeThreadRef.environmentId);
+    const projectPinKey = projectTerminalPinKey(activeThreadProjectKey);
+    switch (nextTerminalDrawerPinState(terminalDrawerPinState)) {
+      case "project":
+        pinTerminalDrawer(projectPinKey, activeThreadRef);
+        return;
+      case "environment":
+        pinTerminalDrawer(environmentPinKey, activeTerminalDrawerRef);
+        unpinTerminalDrawer(projectPinKey);
+        return;
+      case "none":
+        unpinTerminalDrawer(environmentPinKey);
+        return;
     }
   }, [
+    activeTerminalDrawerRef,
     activeThreadProjectKey,
     activeThreadRef,
     pinTerminalDrawer,
-    terminalDrawerPinned,
+    terminalDrawerPinState,
     unpinTerminalDrawer,
   ]);
   const runningTerminalIds = useThreadRunningTerminalIds({
@@ -8247,8 +8256,8 @@ export default function ChatView(props: ChatViewProps) {
               threadId={mountedThreadRef.threadId}
               previewThreadRef={(isActiveDrawer ? activeThreadRef : null) ?? mountedThreadRef}
               active={isActiveDrawer}
-              pinned={isActiveDrawer && terminalDrawerPinned}
-              onTogglePinned={toggleTerminalDrawerPinned}
+              pinState={isActiveDrawer ? terminalDrawerPinState : "none"}
+              onCyclePin={cycleTerminalDrawerPin}
               launchContext={isActiveDrawer ? (activeTerminalLaunchContext ?? null) : null}
               focusRequestId={isActiveDrawer ? terminalFocusRequestId : 0}
               splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}

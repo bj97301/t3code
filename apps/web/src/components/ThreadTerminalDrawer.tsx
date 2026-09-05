@@ -11,8 +11,8 @@ import {
   type TerminalSessionState,
 } from "@t3tools/client-runtime/state/terminal";
 import {
+  Globe,
   Pin,
-  PinOff,
   Plus,
   Square,
   SquareSplitHorizontal,
@@ -46,6 +46,7 @@ import { PanelTabCloseButton } from "~/components/ui/panel-tab-close-button";
 import { readTextFromClipboard, writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { cn } from "~/lib/utils";
 import { type TerminalContextSelection } from "~/lib/terminalContext";
+import { type TerminalDrawerPinState } from "~/lib/terminalDrawer";
 import {
   observeSelectionActions,
   resolveSelectionActionPosition,
@@ -955,9 +956,9 @@ interface ThreadTerminalDrawerProps {
   previewThreadRef?: ScopedThreadRef;
   threadId: ThreadId;
   cwd: string;
-  /** Whether this drawer is pinned for its project. The pin button only renders with `onTogglePinned`. */
-  pinned?: boolean;
-  onTogglePinned?: (() => void) | undefined;
+  /** Whether this drawer is pinned, and how far. The pin button only renders with `onCyclePin`. */
+  pinState?: TerminalDrawerPinState;
+  onCyclePin?: (() => void) | undefined;
   worktreePath?: string | null;
   runtimeEnv?: Record<string, string>;
   visible?: boolean;
@@ -1020,8 +1021,8 @@ export default function ThreadTerminalDrawer({
   previewThreadRef = threadRef,
   threadId,
   cwd,
-  pinned = false,
-  onTogglePinned,
+  pinState = "none",
+  onCyclePin,
   worktreePath,
   runtimeEnv,
   visible = true,
@@ -1236,14 +1237,19 @@ export default function ThreadTerminalDrawer({
   const closeTerminalActionLabel = closeShortcutLabel
     ? `Close Terminal (${closeShortcutLabel})`
     : "Close Terminal";
-  const pinTerminalActionLabel = pinned
-    ? "Unpin Terminal (every thread in this project opens this terminal)"
-    : "Pin Terminal for Project (every thread in this project opens this terminal)";
-  const pinTerminalActionIcon = pinned ? (
-    <PinOff className="size-3.25" />
-  ) : (
-    <Pin className="size-3.25" />
-  );
+  const pinTerminalActionLabel =
+    pinState === "environment"
+      ? "Pinned for All Projects (click to unpin)"
+      : pinState === "project"
+        ? "Pinned to Project (click to pin for all projects)"
+        : "Pin Terminal to Project (every thread in this project opens it)";
+  const pinTerminalActionIcon =
+    pinState === "environment" ? (
+      <Globe className="size-3.25" />
+    ) : (
+      <Pin className="size-3.25" fill={pinState === "project" ? "currentColor" : "none"} />
+    );
+  const pinTerminalActionClassName = pinState === "none" ? "text-foreground/90" : "text-primary";
   const onSplitTerminalAction = useCallback(() => {
     if (hasReachedSplitLimit) return;
     onSplitTerminal();
@@ -1459,14 +1465,12 @@ export default function ThreadTerminalDrawer({
             >
               <Trash2 className="size-3.25" />
             </TerminalActionButton>
-            {onTogglePinned ? (
+            {onCyclePin ? (
               <>
                 <div className="h-4 w-px bg-border/80" />
                 <TerminalActionButton
-                  className={`p-1 transition-colors hover:bg-accent ${
-                    pinned ? "text-primary" : "text-foreground/90"
-                  }`}
-                  onClick={onTogglePinned}
+                  className={`p-1 transition-colors hover:bg-accent ${pinTerminalActionClassName}`}
+                  onClick={onCyclePin}
                   label={pinTerminalActionLabel}
                 >
                   {pinTerminalActionIcon}
@@ -1617,12 +1621,10 @@ export default function ThreadTerminalDrawer({
                   >
                     <Trash2 className="size-3.25" />
                   </TerminalActionButton>
-                  {onTogglePinned ? (
+                  {onCyclePin ? (
                     <TerminalActionButton
-                      className={`inline-flex h-full items-center border-l border-border/70 px-1 transition-colors hover:bg-accent/70 ${
-                        pinned ? "text-primary" : "text-foreground/90"
-                      }`}
-                      onClick={onTogglePinned}
+                      className={`inline-flex h-full items-center border-l border-border/70 px-1 transition-colors hover:bg-accent/70 ${pinTerminalActionClassName}`}
+                      onClick={onCyclePin}
                       label={pinTerminalActionLabel}
                     >
                       {pinTerminalActionIcon}

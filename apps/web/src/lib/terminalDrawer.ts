@@ -1,24 +1,54 @@
-import { type ScopedThreadRef } from "@t3tools/contracts";
+import { type EnvironmentId, type ScopedThreadRef } from "@t3tools/contracts";
+
+/** Where a pinned drawer applies: one project, or every project in the environment. */
+export type TerminalDrawerPinScope = "project" | "environment";
+export type TerminalDrawerPinState = TerminalDrawerPinScope | "none";
+
+export function projectTerminalPinKey(projectKey: string): string {
+  return `project:${projectKey}`;
+}
+
+export function environmentTerminalPinKey(environmentId: EnvironmentId): string {
+  return `environment:${environmentId}`;
+}
 
 /**
- * Thread ref whose drawer layout and shells `terminal.toggle` shows while
- * `threadRef` is active. A project can pin one thread's drawer; every thread
- * in that project then opens it instead of its own. Right-panel terminals
- * ignore the pin and stay on the thread.
+ * Drawer `terminal.toggle` targets for `threadRef` and why. An environment-wide
+ * pin wins over a project pin; either wins over the thread's own drawer.
+ * Right-panel terminals ignore pins and stay on the thread.
  */
-export function resolveTerminalDrawerRef(input: {
+export function resolveTerminalDrawer(input: {
   threadRef: ScopedThreadRef | null;
-  /** The project's pinned drawer thread, already checked to still exist. */
-  pinnedThreadRef: ScopedThreadRef | null;
-}): ScopedThreadRef | null {
-  if (input.threadRef === null) {
-    return null;
+  /** The project's pinned thread, already checked to still exist in that project. */
+  projectPinnedThreadRef: ScopedThreadRef | null;
+  /** The environment's pinned thread, already checked to still exist. */
+  environmentPinnedThreadRef: ScopedThreadRef | null;
+}): { drawerRef: ScopedThreadRef | null; pinState: TerminalDrawerPinState } {
+  const { threadRef } = input;
+  if (threadRef === null) {
+    return { drawerRef: null, pinState: "none" };
   }
-  if (
-    input.pinnedThreadRef === null ||
-    input.pinnedThreadRef.environmentId !== input.threadRef.environmentId
-  ) {
-    return input.threadRef;
+  const environmentPinned = input.environmentPinnedThreadRef;
+  if (environmentPinned !== null && environmentPinned.environmentId === threadRef.environmentId) {
+    return { drawerRef: environmentPinned, pinState: "environment" };
   }
-  return input.pinnedThreadRef;
+  const projectPinned = input.projectPinnedThreadRef;
+  if (projectPinned !== null && projectPinned.environmentId === threadRef.environmentId) {
+    return { drawerRef: projectPinned, pinState: "project" };
+  }
+  return { drawerRef: threadRef, pinState: "none" };
+}
+
+/** The pin button cycles off → this project → every project → off. */
+export function nextTerminalDrawerPinState(
+  current: TerminalDrawerPinState,
+): TerminalDrawerPinState {
+  switch (current) {
+    case "none":
+      return "project";
+    case "project":
+      return "environment";
+    case "environment":
+      return "none";
+  }
 }
