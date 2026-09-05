@@ -270,6 +270,7 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import {
   useTerminalDrawerPin,
   useTerminalDrawerRef,
+  useThreadLocation,
   useThreadProjectKey,
 } from "../hooks/useTerminalDrawerRef";
 import {
@@ -3168,7 +3169,7 @@ export default function ChatView(props: ChatViewProps) {
   const activeThreadWorktreePath = activeThread?.worktreePath ?? null;
   // New shells in the drawer open where the drawer's own thread runs, so a
   // pinned drawer stays rooted in one place no matter which thread is in front.
-  const terminalDrawerShell = useThreadShell(
+  const terminalDrawerThread = useThreadLocation(
     activeTerminalDrawerKey !== null && activeTerminalDrawerKey !== activeThreadKey
       ? activeTerminalDrawerRef
       : null,
@@ -3176,17 +3177,17 @@ export default function ChatView(props: ChatViewProps) {
   // An all-projects pin can put another project's drawer in front, so its
   // project root comes from the drawer thread, not the thread being viewed.
   const terminalDrawerProject = useProject(
-    terminalDrawerShell
-      ? scopeProjectRef(terminalDrawerShell.environmentId, terminalDrawerShell.projectId)
+    terminalDrawerThread
+      ? scopeProjectRef(terminalDrawerThread.environmentId, terminalDrawerThread.projectId)
       : null,
   );
-  const terminalDrawerProjectRoot = terminalDrawerShell
+  const terminalDrawerProjectRoot = terminalDrawerThread
     ? (terminalDrawerProject?.workspaceRoot ?? null)
     : (activeProject?.workspaceRoot ?? null);
-  const terminalDrawerWorktreePath = terminalDrawerShell
-    ? (terminalDrawerShell.worktreePath ?? null)
+  const terminalDrawerWorktreePath = terminalDrawerThread
+    ? (terminalDrawerThread.worktreePath ?? null)
     : activeThreadWorktreePath;
-  const terminalDrawerCwd = terminalDrawerShell
+  const terminalDrawerCwd = terminalDrawerThread
     ? terminalDrawerProjectRoot === null
       ? null
       : projectScriptCwd({

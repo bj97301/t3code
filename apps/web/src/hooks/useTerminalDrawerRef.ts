@@ -3,7 +3,7 @@ import {
   scopedProjectKey,
   scopeProjectRef,
 } from "@t3tools/client-runtime/environment";
-import { type ScopedThreadRef } from "@t3tools/contracts";
+import { type EnvironmentId, type ProjectId, type ScopedThreadRef } from "@t3tools/contracts";
 import { useMemo } from "react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -16,15 +16,39 @@ import {
 import { useThreadShell } from "../state/entities";
 import { selectPinnedTerminalThreadKey, useTerminalUiStateStore } from "../terminalUiStateStore";
 
-/** Project the thread belongs to, from the shell index or a local draft. Null when the thread is unknown. */
-export function useThreadProjectKey(threadRef: ScopedThreadRef | null): string | null {
+export interface ThreadLocation {
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly worktreePath: string | null;
+}
+
+/**
+ * Where a thread lives, from the shell index or, for a not-yet-sent draft, the
+ * composer draft store. Null when the thread is unknown to both.
+ */
+export function useThreadLocation(threadRef: ScopedThreadRef | null): ThreadLocation | null {
   const shell = useThreadShell(threadRef);
-  const draftProjectId = useComposerDraftStore((store) =>
-    threadRef ? (store.getDraftThreadByRef(threadRef)?.projectId ?? null) : null,
+  const draft = useComposerDraftStore((store) =>
+    threadRef ? store.getDraftThreadByRef(threadRef) : null,
   );
-  const projectId = shell?.projectId ?? draftProjectId;
-  return threadRef && projectId
-    ? scopedProjectKey(scopeProjectRef(threadRef.environmentId, projectId))
+  return useMemo(() => {
+    const source = shell ?? draft;
+    if (!threadRef || !source) {
+      return null;
+    }
+    return {
+      environmentId: threadRef.environmentId,
+      projectId: source.projectId,
+      worktreePath: source.worktreePath ?? null,
+    };
+  }, [draft, shell, threadRef]);
+}
+
+/** Project key the thread belongs to. Null when the thread is unknown. */
+export function useThreadProjectKey(threadRef: ScopedThreadRef | null): string | null {
+  const location = useThreadLocation(threadRef);
+  return location
+    ? scopedProjectKey(scopeProjectRef(location.environmentId, location.projectId))
     : null;
 }
 
