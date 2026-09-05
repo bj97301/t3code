@@ -3173,16 +3173,27 @@ export default function ChatView(props: ChatViewProps) {
       ? activeTerminalDrawerRef
       : null,
   );
+  // An all-projects pin can put another project's drawer in front, so its
+  // project root comes from the drawer thread, not the thread being viewed.
+  const terminalDrawerProject = useProject(
+    terminalDrawerShell
+      ? scopeProjectRef(terminalDrawerShell.environmentId, terminalDrawerShell.projectId)
+      : null,
+  );
+  const terminalDrawerProjectRoot = terminalDrawerShell
+    ? (terminalDrawerProject?.workspaceRoot ?? null)
+    : (activeProject?.workspaceRoot ?? null);
   const terminalDrawerWorktreePath = terminalDrawerShell
     ? (terminalDrawerShell.worktreePath ?? null)
     : activeThreadWorktreePath;
-  const terminalDrawerCwd =
-    terminalDrawerShell && activeProject
-      ? projectScriptCwd({
-          project: { cwd: activeProject.workspaceRoot },
+  const terminalDrawerCwd = terminalDrawerShell
+    ? terminalDrawerProjectRoot === null
+      ? null
+      : projectScriptCwd({
+          project: { cwd: terminalDrawerProjectRoot },
           worktreePath: terminalDrawerWorktreePath,
         })
-      : (gitCwd ?? activeProject?.workspaceRoot ?? null);
+    : (gitCwd ?? activeProject?.workspaceRoot ?? null);
   const activeWorkspaceRoot = activeThreadWorktreePath ?? activeProjectCwd ?? undefined;
   const activeTerminalLaunchContext =
     terminalUiLaunchContext?.threadId === activeThreadId ? terminalUiLaunchContext : null;
@@ -3377,7 +3388,7 @@ export default function ChatView(props: ChatViewProps) {
             ? { worktreePath: terminalDrawerWorktreePath }
             : {}),
           env: projectScriptRuntimeEnv({
-            project: { cwd: activeProject.workspaceRoot },
+            project: { cwd: terminalDrawerProjectRoot ?? activeProject.workspaceRoot },
             worktreePath: terminalDrawerWorktreePath,
           }),
         },
@@ -3388,6 +3399,7 @@ export default function ChatView(props: ChatViewProps) {
   }, [
     activeProject,
     activeTerminalDrawerRef,
+    terminalDrawerProjectRoot,
     terminalDrawerWorktreePath,
     allocatableActiveTerminalIds,
     environmentId,
@@ -3424,7 +3436,7 @@ export default function ChatView(props: ChatViewProps) {
             ? { worktreePath: terminalDrawerWorktreePath }
             : {}),
           env: projectScriptRuntimeEnv({
-            project: { cwd: activeProject.workspaceRoot },
+            project: { cwd: terminalDrawerProjectRoot ?? activeProject.workspaceRoot },
             worktreePath: terminalDrawerWorktreePath,
           }),
         },
@@ -3435,6 +3447,7 @@ export default function ChatView(props: ChatViewProps) {
       activeTerminalDrawerRef,
       allocatableActiveTerminalIds,
       openTerminal,
+      terminalDrawerProjectRoot,
       terminalDrawerWorktreePath,
       environmentId,
       gitCwd,
@@ -3462,7 +3475,7 @@ export default function ChatView(props: ChatViewProps) {
         cwd: cwdForOpen,
         ...(terminalDrawerWorktreePath != null ? { worktreePath: terminalDrawerWorktreePath } : {}),
         env: projectScriptRuntimeEnv({
-          project: { cwd: activeProject.workspaceRoot },
+          project: { cwd: terminalDrawerProjectRoot ?? activeProject.workspaceRoot },
           worktreePath: terminalDrawerWorktreePath,
         }),
       },
@@ -3472,6 +3485,7 @@ export default function ChatView(props: ChatViewProps) {
     activeTerminalDrawerRef,
     allocatableActiveTerminalIds,
     openTerminal,
+    terminalDrawerProjectRoot,
     terminalDrawerWorktreePath,
     environmentId,
     gitCwd,
@@ -3547,7 +3561,7 @@ export default function ChatView(props: ChatViewProps) {
 
       const runtimeEnv = projectScriptRuntimeEnv({
         project: {
-          cwd: activeProject.workspaceRoot,
+          cwd: terminalDrawerProjectRoot ?? activeProject.workspaceRoot,
         },
         worktreePath: targetWorktreePath,
         ...(options?.env ? { extraEnv: options.env } : {}),
@@ -3613,6 +3627,7 @@ export default function ChatView(props: ChatViewProps) {
       activeThread,
       activeThreadId,
       terminalDrawerCwd,
+      terminalDrawerProjectRoot,
       terminalDrawerWorktreePath,
       setTerminalOpen,
       setThreadError,
