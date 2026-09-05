@@ -11,7 +11,7 @@ import { resolveTerminalDrawerRef } from "../lib/terminalDrawer";
 import { useThreadShell } from "../state/entities";
 import { selectPinnedTerminalThreadKey, useTerminalUiStateStore } from "../terminalUiStateStore";
 
-/** Project the thread belongs to, from the shell index or a local draft. */
+/** Project the thread belongs to, from the shell index or a local draft. Null when the thread is unknown. */
 export function useThreadProjectKey(threadRef: ScopedThreadRef | null): string | null {
   const shell = useThreadShell(threadRef);
   const draftProjectId = useComposerDraftStore((store) =>
@@ -25,8 +25,8 @@ export function useThreadProjectKey(threadRef: ScopedThreadRef | null): string |
 
 /**
  * Drawer ref `terminal.toggle` targets for `threadRef`: the project's pinned
- * drawer when one is pinned and its thread still exists, otherwise the
- * thread's own. Stable while the inputs are.
+ * drawer when one is pinned and its thread still exists in that project,
+ * otherwise the thread's own. Stable while the inputs are.
  */
 export function useTerminalDrawerRef(threadRef: ScopedThreadRef | null): ScopedThreadRef | null {
   const projectKey = useThreadProjectKey(threadRef);
@@ -37,17 +37,15 @@ export function useTerminalDrawerRef(threadRef: ScopedThreadRef | null): ScopedT
     () => (pinnedThreadKey ? parseScopedThreadKey(pinnedThreadKey) : null),
     [pinnedThreadKey],
   );
-  const pinnedShell = useThreadShell(pinnedThreadRef);
-  const pinnedDraftExists = useComposerDraftStore((store) =>
-    pinnedThreadRef ? store.getDraftThreadByRef(pinnedThreadRef) !== null : false,
-  );
-  const pinnedThreadExists = pinnedShell !== null || pinnedDraftExists;
+  // A deleted thread, or one moved to another project, no longer anchors the pin.
+  const pinnedProjectKey = useThreadProjectKey(pinnedThreadRef);
+  const pinnedThreadValid = pinnedProjectKey !== null && pinnedProjectKey === projectKey;
   return useMemo(
     () =>
       resolveTerminalDrawerRef({
         threadRef,
-        pinnedThreadRef: pinnedThreadExists ? pinnedThreadRef : null,
+        pinnedThreadRef: pinnedThreadValid ? pinnedThreadRef : null,
       }),
-    [pinnedThreadExists, pinnedThreadRef, threadRef],
+    [pinnedThreadRef, pinnedThreadValid, threadRef],
   );
 }

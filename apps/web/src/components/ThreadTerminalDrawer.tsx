@@ -344,6 +344,11 @@ export function TerminalViewport({
   const openPreview = useAtomCommand(previewEnvironment.open, {
     reportFailure: false,
   });
+  // Read through an effect event so a long-lived surface targets the thread
+  // currently in front, not the one it was set up under.
+  const openLinkInPreview = useEffectEvent((url: string, fallbackToBrowser: () => void) =>
+    openTerminalLinkInPreview({ url, threadRef: previewThreadRef, openPreview, fallbackToBrowser }),
+  );
   const runTerminalWrite = useAtomCommand(terminalEnvironment.write, {
     reportFailure: false,
   });
@@ -768,12 +773,7 @@ export function TerminalViewport({
               );
             });
           };
-          void openTerminalLinkInPreview({
-            url: text,
-            threadRef: previewThreadRef,
-            openPreview,
-            fallbackToBrowser,
-          });
+          void openLinkInPreview(text, fallbackToBrowser);
           return;
         }
         const target = resolvePathLinkTarget(text, cwd);

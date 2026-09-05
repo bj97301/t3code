@@ -266,7 +266,11 @@ import {
 import { appendPreviewAnnotationPrompt } from "../lib/previewAnnotation";
 import { appendReviewCommentsToPrompt, type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
-import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
+import {
+  selectPinnedTerminalThreadKey,
+  selectThreadTerminalUiState,
+  useTerminalUiStateStore,
+} from "../terminalUiStateStore";
 import { useTerminalDrawerRef, useThreadProjectKey } from "../hooks/useTerminalDrawerRef";
 import { useKnownTerminalSessions, useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { projectEnvironment } from "../state/projects";
@@ -1819,11 +1823,15 @@ export default function ChatView(props: ChatViewProps) {
     : null;
   const terminalDrawerThreadId = activeTerminalDrawerRef?.threadId ?? null;
   const activeThreadProjectKey = useThreadProjectKey(activeThreadRef);
-  const terminalDrawerPinned = useTerminalUiStateStore(
-    (state) =>
-      activeThreadProjectKey !== null &&
-      state.pinnedTerminalThreadKeyByProjectKey[activeThreadProjectKey] !== undefined,
+  const pinnedTerminalThreadKey = useTerminalUiStateStore((state) =>
+    selectPinnedTerminalThreadKey(
+      state.pinnedTerminalThreadKeyByProjectKey,
+      activeThreadProjectKey,
+    ),
   );
+  // A pin only counts once it resolved; a stale pin to a deleted thread reads as unpinned.
+  const terminalDrawerPinned =
+    pinnedTerminalThreadKey !== null && pinnedTerminalThreadKey === activeTerminalDrawerKey;
   const pinTerminalDrawer = useTerminalUiStateStore((state) => state.pinTerminalDrawer);
   const unpinTerminalDrawer = useTerminalUiStateStore((state) => state.unpinTerminalDrawer);
   // Pinning keeps the drawer in front for every thread in the project;
@@ -3512,13 +3520,13 @@ export default function ChatView(props: ChatViewProps) {
           return { ...current, [activeProject.id]: script.id };
         });
       }
-      const targetCwd = options?.cwd ?? gitCwd ?? activeProject.workspaceRoot;
+      const targetCwd = options?.cwd ?? terminalDrawerCwd ?? activeProject.workspaceRoot;
       const baseTerminalId =
         terminalUiState.activeTerminalId || activeKnownTerminalIds[0] || DEFAULT_THREAD_TERMINAL_ID;
       const isBaseTerminalBusy = runningTerminalIds.includes(baseTerminalId);
       const wantsNewTerminal = Boolean(options?.preferNewTerminal) || isBaseTerminalBusy;
       const shouldCreateNewTerminal = wantsNewTerminal;
-      const targetWorktreePath = options?.worktreePath ?? activeThread.worktreePath ?? null;
+      const targetWorktreePath = options?.worktreePath ?? terminalDrawerWorktreePath;
 
       setTerminalUiLaunchContext({
         threadId: activeThreadId,
@@ -3595,7 +3603,8 @@ export default function ChatView(props: ChatViewProps) {
       activeTerminalDrawerRef,
       activeThread,
       activeThreadId,
-      gitCwd,
+      terminalDrawerCwd,
+      terminalDrawerWorktreePath,
       setTerminalOpen,
       setThreadError,
       storeNewTerminal,
