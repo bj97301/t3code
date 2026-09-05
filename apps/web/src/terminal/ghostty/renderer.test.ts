@@ -22,6 +22,64 @@ const cell = (text: string, wide = 0): GhosttyCell => ({
   selected: false,
 });
 
+const WHITE = "rgb(255, 255, 255)";
+const BLACK = "rgb(0, 0, 0)";
+
+/** Canvas stub that records fillRect calls per fill style and every fillText call. */
+function recordingContext() {
+  const rects = new Map<string, number[][]>();
+  const fillTextCalls: unknown[][] = [];
+  let fillStyle = "";
+  const context = {
+    canvas: { width: 200, height: 80 },
+    beginPath: () => {},
+    clip: () => {},
+    fillRect: (...args: number[]) => {
+      rects.set(fillStyle, [...(rects.get(fillStyle) ?? []), args]);
+    },
+    fillText: (...args: unknown[]) => fillTextCalls.push(args),
+    rect: () => {},
+    resetTransform: () => {},
+    restore: () => {},
+    save: () => {},
+    set fillStyle(value: string) {
+      fillStyle = value;
+    },
+    set font(_value: string) {},
+    set textBaseline(_value: string) {},
+  } as unknown as CanvasRenderingContext2D;
+  return {
+    context,
+    fillTextCalls,
+    rectsFilledWith: (style: string) => rects.get(style) ?? [],
+  };
+}
+
+/** White-on-black snapshot of the given rows, every row dirty, one cell per character. */
+function textSnapshot(rows: readonly string[], cursor?: { x: number; y: number }): GhosttySnapshot {
+  return {
+    cols: Math.max(...rows.map((row) => row.length)),
+    rows: rows.length,
+    foreground: { r: 255, g: 255, b: 255 },
+    background: { r: 0, g: 0, b: 0 },
+    cursor: { r: 255, g: 255, b: 255 },
+    cursorX: cursor?.x ?? -1,
+    cursorY: cursor?.y ?? -1,
+    cursorVisible: cursor !== undefined,
+    cursorBlinking: false,
+    cursorStyle: 1,
+    dirtyRows: new Set(rows.map((_, index) => index)),
+    rowData: rows.map((text) => ({
+      cells: Array.from(text, (char) => cell(char)),
+      text,
+      isWrapContinuation: false,
+      wrapsToNext: false,
+    })),
+  };
+}
+
+const RENDER_OPTIONS = { fontSize: 12, fontFamily: "monospace", padding: 4, forceFull: false };
+
 describe("terminalGridSize", () => {
   it("matches the mobile renderer's cell-and-padding sizing model", () => {
     expect(terminalGridSize(808, 408, { width: 10, height: 20, baseline: 15 }, 4)).toEqual({
@@ -76,62 +134,19 @@ describe("ghosttyTextRunEnd", () => {
 
 describe("renderGhosttySnapshot", () => {
   it("fills block elements edge to edge so stacked rows leave no stripe", () => {
-    const foregroundRects: number[][] = [];
-    const fillTextCalls: unknown[][] = [];
-    let fillStyle = "";
-    const context = {
-      canvas: { width: 200, height: 80 },
-      beginPath: () => {},
-      clip: () => {},
-      fillRect: (...args: number[]) => {
-        if (fillStyle === "rgb(255, 255, 255)") foregroundRects.push(args);
-      },
-      fillText: (...args: unknown[]) => fillTextCalls.push(args),
-      rect: () => {},
-      resetTransform: () => {},
-      restore: () => {},
-      save: () => {},
-      set fillStyle(value: string) {
-        fillStyle = value;
-      },
-      set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
-    const row = (text: string) => ({
-      cells: Array.from(text, (char) => cell(char)),
-      text,
-      isWrapContinuation: false,
-      wrapsToNext: false,
-    });
-    const snapshot: GhosttySnapshot = {
-      cols: 3,
-      rows: 2,
-      foreground: { r: 255, g: 255, b: 255 },
-      background: { r: 0, g: 0, b: 0 },
-      cursor: { r: 255, g: 255, b: 255 },
-      cursorX: -1,
-      cursorY: -1,
-      cursorVisible: false,
-      cursorBlinking: false,
-      cursorStyle: 1,
-      dirtyRows: new Set([0, 1]),
-      // The half blocks qrcode-terminal emits for Expo QR codes, plus a
-      // quadrant so the merged-rectangle table is exercised.
-      rowData: [row("\u2580\u2584\u2588"), row("\u2588 \u2599")],
-    };
+    const { context, fillTextCalls, rectsFilledWith } = recordingContext();
 
     renderGhosttySnapshot({
+      ...RENDER_OPTIONS,
       context,
-      snapshot,
+      // The half blocks qrcode-terminal emits for Expo QR codes, plus a
+      // quadrant so the merged-rectangle table is exercised.
+      snapshot: textSnapshot(["\u2580\u2584\u2588", "\u2588 \u2599"]),
       metrics: { width: 10, height: 20, baseline: 15 },
-      fontSize: 12,
-      fontFamily: "monospace",
-      padding: 4,
-      forceFull: false,
       cursorOn: false,
     });
 
-    expect(foregroundRects).toEqual([
+    expect(rectsFilledWith(WHITE)).toEqual([
       [4, 4, 10, 10],
       [14, 14, 10, 10],
       [24, 4, 10, 20],
@@ -143,116 +158,34 @@ describe("renderGhosttySnapshot", () => {
   });
 
   it("keeps a sub-pixel eighth block inside its own cell", () => {
-    const foregroundRects: number[][] = [];
-    let fillStyle = "";
-    const context = {
-      canvas: { width: 200, height: 40 },
-      beginPath: () => {},
-      clip: () => {},
-      fillRect: (...args: number[]) => {
-        if (fillStyle === "rgb(255, 255, 255)") foregroundRects.push(args);
-      },
-      fillText: () => {},
-      rect: () => {},
-      resetTransform: () => {},
-      restore: () => {},
-      save: () => {},
-      set fillStyle(value: string) {
-        fillStyle = value;
-      },
-      set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
-    const snapshot: GhosttySnapshot = {
-      cols: 2,
-      rows: 1,
-      foreground: { r: 255, g: 255, b: 255 },
-      background: { r: 0, g: 0, b: 0 },
-      cursor: { r: 255, g: 255, b: 255 },
-      cursorX: -1,
-      cursorY: -1,
-      cursorVisible: false,
-      cursorBlinking: false,
-      cursorStyle: 1,
-      dirtyRows: new Set([0]),
-      rowData: [
-        {
-          cells: [cell(" "), cell("\u2595")],
-          text: " \u2595",
-          isWrapContinuation: false,
-          wrapsToNext: false,
-        },
-      ],
-    };
+    const { context, rectsFilledWith } = recordingContext();
 
     renderGhosttySnapshot({
+      ...RENDER_OPTIONS,
       context,
-      snapshot,
+      snapshot: textSnapshot([" \u2595"]),
       // The right eighth of the second cell spans 17.5..18.4, which rounds to
       // nothing; it must land on 17..18 rather than spill into column three.
       metrics: { width: 7.2, height: 16, baseline: 11 },
-      fontSize: 12,
-      fontFamily: "monospace",
-      padding: 4,
-      forceFull: false,
       cursorOn: false,
     });
 
-    expect(foregroundRects).toEqual([[17, 4, 1, 16]]);
+    expect(rectsFilledWith(WHITE)).toEqual([[17, 4, 1, 16]]);
   });
 
   it("keeps block geometry when a block cursor inverts the cell", () => {
-    const backgroundRects: number[][] = [];
-    const fillTextCalls: unknown[][] = [];
-    let fillStyle = "";
-    const context = {
-      canvas: { width: 200, height: 40 },
-      beginPath: () => {},
-      clip: () => {},
-      fillRect: (...args: number[]) => {
-        if (fillStyle === "rgb(0, 0, 0)") backgroundRects.push(args);
-      },
-      fillText: (...args: unknown[]) => fillTextCalls.push(args),
-      rect: () => {},
-      resetTransform: () => {},
-      restore: () => {},
-      save: () => {},
-      set fillStyle(value: string) {
-        fillStyle = value;
-      },
-      set font(_value: string) {},
-      set textBaseline(_value: string) {},
-    } as unknown as CanvasRenderingContext2D;
-    const snapshot: GhosttySnapshot = {
-      cols: 1,
-      rows: 1,
-      foreground: { r: 255, g: 255, b: 255 },
-      background: { r: 0, g: 0, b: 0 },
-      cursor: { r: 255, g: 255, b: 255 },
-      cursorX: 0,
-      cursorY: 0,
-      cursorVisible: true,
-      cursorBlinking: false,
-      cursorStyle: 1,
-      dirtyRows: new Set(),
-      rowData: [
-        { cells: [cell("\u2584")], text: "\u2584", isWrapContinuation: false, wrapsToNext: false },
-      ],
-    };
+    const { context, fillTextCalls, rectsFilledWith } = recordingContext();
 
     renderGhosttySnapshot({
+      ...RENDER_OPTIONS,
       context,
-      snapshot,
+      snapshot: textSnapshot(["\u2584"], { x: 0, y: 0 }),
       metrics: { width: 10, height: 20, baseline: 15 },
-      fontSize: 12,
-      fontFamily: "monospace",
-      padding: 4,
-      forceFull: false,
       cursorOn: true,
     });
 
     // The row clear comes first; the inverted lower half block follows it.
-    expect(backgroundRects).toEqual([
+    expect(rectsFilledWith(BLACK)).toEqual([
       [4, 4, 10, 20],
       [4, 14, 10, 10],
     ]);
