@@ -1,0 +1,6 @@
+self-hosted-runner:
+  labels:
+    - electro-linux-x64
+    - t3-linux-arm64
+    - t3-local-mac
+    - blacksmith-32vcpu-windows-2025

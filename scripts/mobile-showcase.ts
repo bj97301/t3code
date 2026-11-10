@@ -1201,7 +1201,7 @@ async function captureAndroid(
     }
     launchedEmulator = spawnProcess(
       androidSdkTool("emulator/emulator"),
-      ["-avd", capture.device.avd, "-no-snapshot-load", "-no-boot-anim"],
+      ["-avd", capture.device.avd, "-no-window", "-no-audio", "-no-snapshot-load", "-no-boot-anim"],
       { stdio: "ignore", detached: true },
     );
     launchedEmulator.unref();
